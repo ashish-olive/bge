@@ -1,0 +1,18 @@
+# Data Pipeline Requirements
+# For processing large CSV files
+
+# Data processing
+pandas==2.1.4
+numpy==1.26.3
+dask[complete]==2023.12.1
+
+# Database
+SQLAlchemy==2.0.23
+Flask-SQLAlchemy==3.1.1
+
+# Flask (for database initialization)
+Flask==3.0.0
+
+# Utilities
+tqdm==4.66.1
+python-dotenv==1.0.0

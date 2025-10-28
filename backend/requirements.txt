@@ -1,0 +1,31 @@
+# Backend Requirements (Local - CPU inference)
+# For Flask API with ML inference
+
+# Flask
+Flask==3.0.0
+Flask-CORS==4.0.0
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.0.1
+gunicorn==21.2.0
+
+# Database
+SQLAlchemy==2.0.23
+
+# PyTorch (CPU-only version)
+torch>=2.2.0
+torchvision>=0.17.0
+
+# ML utilities
+scikit-learn==1.3.2
+xgboost==2.0.3
+
+# Data processing
+numpy==1.26.3
+pandas==2.1.4
+
+# Utilities
+python-dotenv==1.0.0
+pytz==2023.3
+
+# Data processing (for large files)
+dask[complete]==2023.12.1
