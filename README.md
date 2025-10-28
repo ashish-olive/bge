@@ -67,19 +67,26 @@ biogas-analytics/
 
 #### 1. **Data Processing (One-time)**
 ```bash
-cd biogas-analytics/data-pipeline
-python scripts/process_csv.py --input ../../dut_complete.csv --output ../instance/biogas.db
+cd data-pipeline
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python scripts/load_to_database.py --input ../../dut_complete.csv
 ```
 **Time:** 30-45 minutes  
-**Output:** SQLite database (~2-3 GB)
+**Output:** SQLite database (~2-3 GB) in `instance/biogas.db`
 
-#### 2. **Train ML Models (Optional - use T4 GPU)**
+#### 2. **Train ML Models (Optional - use T4 GPU on Google Colab)**
 ```bash
+# Upload biogas.db to Google Drive
+# In Colab:
 cd ml-models
+pip install -r requirements.txt
 python scripts/train_all.py --use-gpu --epochs 100
 ```
 **Time:** 2-3 hours on T4 GPU  
-**Output:** Trained models in `trained_models/`
+**Output:** Trained models (`.pth` files) in `trained_models/`  
+**Note:** Models are optional - app works without them
 
 #### 3. **Run Backend**
 ```bash
@@ -95,36 +102,45 @@ python app.py
 ```bash
 cd frontend
 npm install
+cp .env.example .env.local
+# Edit .env.local: REACT_APP_API_URL=http://localhost:5001/api
 npm start
 ```
 **App:** http://localhost:3000
+
+**7 Dashboards:**
+- Overview - System KPIs and trends
+- Gas Composition - CH4, CO2, quality metrics
+- Equipment - Compressor and blower monitoring
+- Anomalies - Real-time alerts and detection
+- Maintenance - Predictive maintenance events
+- Forecasting - LSTM 1-24h predictions (requires trained model)
+- Predictions - Autoencoder/VAE/CNN-LSTM analysis (requires trained models)
 
 ---
 
 ## 🎯 API Endpoints
 
 ### **System Overview**
-- `GET /api/system/summary?hours=24`
-- `GET /api/system/trends?hours=24`
-- `GET /api/system/equipment-health`
+- `GET /api/health` - System health check
+- `GET /api/system/summary?hours=24` - Overall metrics
+- `GET /api/system/trends?hours=24` - Time series data
 
 ### **Gas Composition**
-- `GET /api/gas/composition?hours=24`
-- `GET /api/gas/quality-metrics`
+- `GET /api/gas/composition?hours=24` - Gas quality metrics
+- `GET /api/gas/trends?hours=24` - Composition over time
 
 ### **Equipment Monitoring**
-- `GET /api/equipment/compressor?hours=24`
-- `GET /api/equipment/blower?hours=24`
-- `GET /api/equipment/temperatures`
+- `GET /api/equipment/compressor?hours=24` - Compressor stats
+- `GET /api/equipment/blower?hours=24` - Blower stats
 
-### **Predictions**
-- `POST /api/ml/forecast` - LSTM forecasting
-- `POST /api/ml/detect-anomalies` - Anomaly detection
-- `GET /api/ml/maintenance-predictions`
+### **Alerts & Maintenance**
+- `GET /api/alerts?severity=all&hours=24` - Anomaly alerts
+- `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
+- `GET /api/maintenance/predictions` - Maintenance events
 
-### **Alerts**
-- `GET /api/alerts?severity=all&hours=24`
-- `POST /api/alerts/{id}/acknowledge`
+### **ML Models**
+- `GET /api/ml/model-status` - Check which models are trained
 
 ---
 
@@ -299,23 +315,27 @@ cd frontend && npm test
 ### **Phase 1: Foundation** ✅
 - [x] Data exploration
 - [x] Project structure
-- [ ] Data pipeline
-- [ ] Database schema
+- [x] Data pipeline (ETL script)
+- [x] Database schema (5 tables)
 
-### **Phase 2: Analytics** (In Progress)
-- [ ] Backend API
-- [ ] Frontend dashboard
-- [ ] Real-time metrics
+### **Phase 2: Analytics** ✅
+- [x] Backend API (13 endpoints)
+- [x] Frontend dashboard (7 tabs)
+- [x] Real-time metrics
+- [x] Interactive visualizations
 
-### **Phase 3: ML Models** (Next)
-- [ ] LSTM forecaster
-- [ ] Autoencoder anomaly detection
-- [ ] Predictive maintenance
+### **Phase 3: ML Models** ✅ (Architecture Ready)
+- [x] LSTM forecaster architecture
+- [x] Autoencoder anomaly detection architecture
+- [x] CNN-LSTM pattern recognition architecture
+- [x] VAE advanced anomaly detection architecture
+- [ ] Training scripts (can be added)
+- [ ] Trained model files (train on Colab)
 
 ### **Phase 4: Production** (Future)
 - [ ] Docker deployment
-- [ ] Real-time streaming
-- [ ] Alert system
+- [ ] Real-time streaming (Kafka)
+- [ ] Automated alerts
 - [ ] Mobile app
 
 ---
@@ -336,7 +356,7 @@ Proprietary - Internal Use Only
 
 Built using architecture patterns from enterprise-grade analytics platforms, adapted for industrial IoT and biogas operations.
 
-**Total Development Time:** 2-3 weeks  
-**Data Processing:** 30-45 minutes  
-**Model Training:** 2-3 hours (T4 GPU)  
-**Deployment:** Instant (local) or 1-2 days (production)
+**Setup Time:** ~50 minutes (ETL + Backend + Frontend)  
+**Data Processing:** 30-45 minutes (one-time)  
+**Model Training:** 2-3 hours on T4 GPU (optional)  
+**GitHub:** https://github.com/ashish-olive/bge
