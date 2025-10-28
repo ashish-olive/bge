@@ -29,15 +29,6 @@ class BiogasCSVProcessor:
         
     def estimate_total_rows(self, filepath):
         """Estimate total rows in CSV file"""
-        print("Estimating total rows...")
-        
-        # Read sample to get average row size
-        sample_df = pd.read_csv(filepath, nrows=1000)
-        
-        # Get file size
-        file_size = Path(filepath).stat().st_size
-        
-        # Estimate based on sample
         with open(filepath, 'r') as f:
             header = f.readline()
             header_size = len(header.encode('utf-8'))
@@ -51,10 +42,117 @@ class BiogasCSVProcessor:
                 sample_data.append(len(line.encode('utf-8')))
         
         avg_row_size = np.mean(sample_data)
+        file_size = Path(filepath).stat().st_size
         estimated_rows = int((file_size - header_size) / avg_row_size)
         
         print(f"Estimated total rows: {estimated_rows:,}")
         return estimated_rows
+    
+    def validate_csv(self, filepath, sample_chunks=10):
+        """
+        Pre-validate CSV file for data quality issues
+        
+        Args:
+            filepath: Path to CSV file
+            sample_chunks: Number of chunks to sample
+            
+        Returns:
+            dict with validation results
+        """
+        print("\n" + "="*80)
+        print("DATA VALIDATION PRE-CHECK")
+        print("="*80)
+        
+        validation_results = {
+            'total_rows_sampled': 0,
+            'timestamp_issues': 0,
+            'missing_values': {},
+            'warnings': []
+        }
+        
+        try:
+            total_rows = self.estimate_total_rows(filepath)
+            total_chunks = total_rows // self.chunk_size + 1
+            
+            if sample_chunks > total_chunks:
+                sample_chunks = total_chunks
+            
+            chunk_indices = [int(i * total_chunks / sample_chunks) for i in range(sample_chunks)]
+            
+            print(f"\nSampling {sample_chunks} chunks from {total_chunks} total chunks...")
+            print(f"Checking ~{sample_chunks * self.chunk_size:,} rows out of {total_rows:,}\n")
+            
+            chunk_iterator = pd.read_csv(filepath, chunksize=self.chunk_size, low_memory=False)
+            
+            for i, chunk_df in enumerate(chunk_iterator):
+                if i not in chunk_indices:
+                    continue
+                
+                validation_results['total_rows_sampled'] += len(chunk_df)
+                print(f"Validating chunk {i+1}...", end=' ')
+                
+                # Check timestamp parsing
+                if 'timestamp' in chunk_df.columns:
+                    timestamps = pd.to_datetime(chunk_df['timestamp'], errors='coerce', utc=True)
+                    invalid_timestamps = timestamps.isna().sum()
+                    validation_results['timestamp_issues'] += invalid_timestamps
+                    
+                    if invalid_timestamps > 0:
+                        validation_results['warnings'].append(
+                            f"Chunk {i+1}: {invalid_timestamps} invalid timestamps"
+                        )
+                
+                # Check for missing values
+                missing = chunk_df.isnull().sum()
+                for col, count in missing.items():
+                    if count > 0:
+                        if col not in validation_results['missing_values']:
+                            validation_results['missing_values'][col] = 0
+                        validation_results['missing_values'][col] += count
+                
+                print("✓")
+                
+                if len([idx for idx in chunk_indices if idx <= i]) >= sample_chunks:
+                    break
+            
+            # Print summary
+            print("\n" + "="*80)
+            print("VALIDATION SUMMARY")
+            print("="*80)
+            
+            print(f"\n✓ Sampled {validation_results['total_rows_sampled']:,} rows")
+            
+            if validation_results['timestamp_issues'] > 0:
+                print(f"\n⚠️  TIMESTAMP ISSUES: {validation_results['timestamp_issues']} invalid timestamps")
+                print("   → These rows will be dropped during processing")
+                estimated_total = validation_results['timestamp_issues'] * (total_rows / validation_results['total_rows_sampled'])
+                print(f"   → Estimated total: ~{int(estimated_total):,} rows will be dropped")
+            else:
+                print("\n✓ No timestamp issues found")
+            
+            if validation_results['missing_values']:
+                print(f"\n⚠️  MISSING VALUES in {len(validation_results['missing_values'])} columns (top 5):")
+                sorted_missing = sorted(validation_results['missing_values'].items(), 
+                                       key=lambda x: x[1], reverse=True)[:5]
+                for col, count in sorted_missing:
+                    pct = (count / validation_results['total_rows_sampled']) * 100
+                    print(f"   - {col}: {count:,} ({pct:.1f}%)")
+            else:
+                print("\n✓ No missing values found")
+            
+            print("\n" + "="*80)
+            if validation_results['timestamp_issues'] > 0:
+                print("⚠️  VALIDATION PASSED WITH WARNINGS")
+                print("   Processing will continue, problematic rows will be dropped")
+            else:
+                print("✅ VALIDATION PASSED - CSV is ready for processing")
+            print("="*80 + "\n")
+            
+            return validation_results
+            
+        except Exception as e:
+            print(f"\n❌ Validation failed: {str(e)}")
+            return None
     
     def process_chunk(self, chunk_df):
         """
@@ -66,8 +164,17 @@ class BiogasCSVProcessor:
         Returns:
             Processed DataFrame
         """
-        # Convert timestamp to datetime
-        chunk_df['timestamp'] = pd.to_datetime(chunk_df['timestamp'], errors='coerce')
+        # Convert timestamp to datetime with UTC timezone handling
+        chunk_df['timestamp'] = pd.to_datetime(chunk_df['timestamp'], errors='coerce', utc=True)
+        
+        # Drop rows with invalid timestamps
+        invalid_count = chunk_df['timestamp'].isna().sum()
+        if invalid_count > 0:
+            print(f"  Warning: Dropping {invalid_count} rows with invalid timestamps")
+            chunk_df = chunk_df.dropna(subset=['timestamp'])
+        
+        # Convert to timezone-naive (remove UTC timezone info)
+        chunk_df['timestamp'] = chunk_df['timestamp'].dt.tz_localize(None)
         
         # Extract time features
         chunk_df['hour'] = chunk_df['timestamp'].dt.hour

@@ -163,12 +163,21 @@ def main():
     print("="*80)
     print()
     
+    # Validate CSV first
+    processor = BiogasCSVProcessor(chunk_size=args.chunk_size)
+    
+    if not args.test_mode:
+        validation_results = processor.validate_csv(input_path, sample_chunks=10)
+        
+        if validation_results and validation_results['timestamp_issues'] > 0:
+            response = input("\nContinue with processing? (y/n): ")
+            if response.lower() != 'y':
+                print("\nProcessing cancelled by user.")
+                return 0
+    
     # Create database
     app = create_database(db_path)
     engine = create_engine(f'sqlite:///{db_path}')
-    
-    # Process CSV
-    processor = BiogasCSVProcessor(chunk_size=args.chunk_size)
     
     start_time = datetime.now()
     chunk_count = 0

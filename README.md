@@ -66,15 +66,39 @@ biogas-analytics/
 ### **Quick Start**
 
 #### 1. **Data Processing (One-time)**
+
+**First, place your CSV file:**
+```
+Your-Directory/
+├── dut_complete.csv          ← Place your 17GB CSV here
+└── biogas-analytics/         ← Clone the repo here
+    ├── data-pipeline/
+    ├── backend/
+    └── ...
+```
+
+**Then run the ETL pipeline:**
 ```bash
-cd data-pipeline
+cd biogas-analytics/data-pipeline
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+# Process CSV (assumes CSV is in parent directory)
 python scripts/load_to_database.py --input ../../dut_complete.csv
+
+# Or specify full path to CSV:
+python scripts/load_to_database.py --input /path/to/your/dut_complete.csv
 ```
 **Time:** 30-45 minutes  
-**Output:** SQLite database (~2-3 GB) in `instance/biogas.db`
+**Output:** SQLite database (~2-3 GB) in `biogas-analytics/instance/biogas.db`
+
+**What happens:**
+- Pre-validation checks for data quality issues
+- Processes 21.7M rows in chunks of 100K
+- Drops rows with invalid timestamps
+- Creates database with 5 tables
+- Calculates hourly aggregates
 
 #### 2. **Train ML Models (Optional - use T4 GPU on Google Colab)**
 ```bash
@@ -151,24 +175,28 @@ npm start
 - **Input:** 24-hour historical sensor data (95 features)
 - **Output:** Next 1-24 hours gas production forecast
 - **Accuracy:** MAPE < 5% for 1-hour ahead
+- **Why LSTM?** LSTMs excel at learning long-term dependencies in sequential time-series data, making them ideal for forecasting gas production based on historical sensor patterns. They can capture complex temporal relationships that simpler models miss.
 
 ### **2. Autoencoder Anomaly Detector**
 - **Architecture:** Encoder-Decoder (95 → 32 → 95)
 - **Input:** Current sensor snapshot
 - **Output:** Reconstruction error (anomaly score)
 - **Threshold:** 95th percentile of training errors
+- **Why Autoencoder?** Autoencoders learn to compress normal operating patterns into a lower-dimensional space. When anomalies occur, the reconstruction error spikes because the model hasn't seen these patterns during training. This unsupervised approach works without labeled anomaly data.
 
 ### **3. CNN-LSTM Hybrid**
-- **Architecture:** 1D-CNN + LSTM
+- **Architecture:** 1D-CNN + bidirectional LSTM
 - **Input:** Sliding window (1 hour × 95 sensors)
 - **Output:** Pattern classification (normal/fault types)
 - **Use:** Fault diagnosis and classification
+- **Why CNN-LSTM?** CNNs extract spatial features across multiple sensors simultaneously, while LSTMs capture temporal evolution. This combination is powerful for recognizing complex fault patterns that involve multiple sensors changing over time, like compressor degradation or valve failures.
 
-### **4. Predictive Maintenance**
-- **Architecture:** XGBoost + Feature Engineering
-- **Input:** Equipment health indicators
-- **Output:** Time to failure (hours)
-- **Features:** Motor current, temperature trends, pressure differentials
+### **4. Variational Autoencoder (VAE)**
+- **Architecture:** Probabilistic encoder-decoder (95 → 32 → 95)
+- **Input:** Current sensor snapshot
+- **Output:** Anomaly probability score
+- **Use:** Advanced anomaly detection for rare events
+- **Why VAE?** Unlike standard autoencoders, VAEs learn a probabilistic distribution of normal behavior, making them better at detecting rare anomalies and providing confidence scores. They're particularly useful for catching subtle equipment degradation before it becomes critical.
 
 ---
 
